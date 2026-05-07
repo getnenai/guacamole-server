@@ -151,6 +151,13 @@ const char* GUAC_RDP_CLIENT_ARGS[] = {
 
     "force-lossless",
     "normalize-clipboard",
+
+    /* Nen fork: emit a wire-level nop after each guac_rdp_handle_input_events
+     * iteration. Used by Cup's RDP controller as a precise per-keystroke
+     * barrier signal. Default off; with the arg disabled this build is
+     * bit-for-bit equivalent to upstream. See FORK.md and NEN-1341. */
+    "emit-input-drain",
+
     NULL
 };
 
@@ -723,6 +730,16 @@ enum RDP_ARGS_IDX {
      */
     IDX_NORMALIZE_CLIPBOARD,
 
+    /**
+     * Nen fork: "true" if guacd should emit a wire-level nop instruction
+     * after each guac_rdp_handle_input_events iteration, "false" or blank
+     * otherwise. Cup's RDP controller uses this as a per-keystroke barrier
+     * between keydown and keyup events (NEN-1341). The default is "false";
+     * with the arg disabled this build is bit-for-bit equivalent to
+     * upstream Apache 1.6.0.
+     */
+    IDX_EMIT_INPUT_DRAIN,
+
     RDP_ARGS_COUNT
 };
 
@@ -897,6 +914,11 @@ guac_rdp_settings* guac_rdp_parse_args(guac_user* user,
     settings->lossless =
         guac_user_parse_args_boolean(user, GUAC_RDP_CLIENT_ARGS, argv,
                 IDX_FORCE_LOSSLESS, 0);
+
+    /* Nen fork: emit-input-drain marker — see settings.h docstring. */
+    settings->emit_input_drain =
+        guac_user_parse_args_boolean(user, GUAC_RDP_CLIENT_ARGS, argv,
+                IDX_EMIT_INPUT_DRAIN, 0);
 
     /* Domain */
     settings->domain =

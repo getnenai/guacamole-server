@@ -680,6 +680,16 @@ typedef struct guac_rdp_settings {
      */
     int wol_wait_time;
 
+    /**
+     * Nen fork: non-zero to emit a wire-level "nop" instruction after every
+     * guac_rdp_handle_input_events() iteration. Cup's RDP controller uses
+     * the inbound nop as a precise per-keystroke barrier signal between
+     * keydown and keyup events (see NEN-1341 / FORK.md). Default 0; the
+     * builds is bit-for-bit equivalent to upstream Apache 1.6.0 when this
+     * is disabled.
+     */
+    int emit_input_drain;
+
 } guac_rdp_settings;
 
 /**

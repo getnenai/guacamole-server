@@ -646,6 +646,17 @@ static int guac_rdp_handle_connection(guac_client* client) {
         /* Handle any input events that have been received */
         guac_rdp_handle_input_events(rdp_client);
 
+        /* Nen fork: emit a wire-level nop after the input drain so clients
+         * (e.g. Cup's RDP controller) can use it as a precise per-iteration
+         * barrier between keydown and keyup events. Gated behind the
+         * emit-input-drain RDP connection arg; with the arg disabled this
+         * block is dead code and the build is bit-for-bit upstream. The
+         * inbound nop is universally ignored by conformant clients, so the
+         * extra traffic is harmless against clients that do not opt in.
+         * See FORK.md and NEN-1341. */
+        if (settings->emit_input_drain)
+            guac_protocol_send_nop(client->socket);
+
         /* Close connection cleanly if server is disconnecting */
         if (connection_closing)
             guac_rdp_client_abort(client, rdp_inst);
