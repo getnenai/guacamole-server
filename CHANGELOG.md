@@ -35,20 +35,22 @@ Adds the `keepalive-interval` RDP connection argument.
 
 ### Verification
 
-> ⚠️ **Not yet verified.** This patch was authored as a strawman and
-> has not been built, run against guacd, or observed on the wire. The
-> patch follows the exact pattern of the prior `emit-input-drain` work
-> (same call site, same `guac_protocol_send_nop` API, same gating
-> shape), so the code review surface is small, but a real verification
-> pass is required before merging.
+**Compile verified.** Built end-to-end against the cup repo's
+`docker/Dockerfile.guacd` (the production build chain — Alpine 3.18 +
+FreeRDP from source with `WITH_KRB5=ON` + autobuild.sh against the
+guacamole-server tree). Build completed cleanly under
+`-Werror -Wall -pedantic`, so no warnings on the patched files.
+guacd binary, libguac-client libraries, and DEPENDENCIES manifest all
+produced successfully.
 
-Expected verification once built:
+**Runtime not verified.** Still needs:
 
 - Set `keepalive-interval=5000` on an RDP connection against an idle
   Windows desktop. Observe one inbound `nop` instruction every ~5s on
   the wire (tcpdump / wireshark / guacd debug log).
-- With `keepalive-interval` unset (or 0), no inbound `nop` traffic;
-  build is bit-for-bit equivalent to upstream + emit-input-drain.
+- With `keepalive-interval` unset (or 0), confirm no extra inbound
+  `nop` traffic; runtime should be bit-for-bit equivalent to
+  `1.6.0-nen-0.1`.
 - Upstream Apache Guacamole web client connects to the patched guacd
   with `keepalive-interval=5000` and silently drops the inbound nops
   without error.
