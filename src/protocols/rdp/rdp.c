@@ -679,9 +679,10 @@ static int guac_rdp_handle_connection(guac_client* client) {
             if ((now - last_keepalive_nop) >= settings->keepalive_interval) {
                 guac_client_log(client, GUAC_LOG_INFO,
                         "NEN-1488 DEBUG: emitting keepalive nop "
-                        "(interval=%dms, since_last=%lldms)",
+                        "(interval=%dms, since_last=%lldms, connected_users=%d)",
                         settings->keepalive_interval,
-                        (long long)(now - last_keepalive_nop));
+                        (long long)(now - last_keepalive_nop),
+                        client->connected_users);
                 guac_protocol_send_nop(client->socket);
                 last_keepalive_nop = now;
             }
