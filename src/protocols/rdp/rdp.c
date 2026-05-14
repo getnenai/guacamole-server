@@ -605,6 +605,12 @@ static int guac_rdp_handle_connection(guac_client* client) {
 
     rdp_client->render_thread = guac_display_render_thread_create(rdp_client->display);
 
+    /* Nen fork: timestamp of last keepalive nop emitted by this connection.
+     * Initialised to the current monotonic millisecond clock so the first
+     * keepalive fires after a full interval rather than immediately. Used
+     * only if settings->keepalive_interval > 0. See FORK.md and NEN-1488. */
+    guac_timestamp last_keepalive_nop = guac_timestamp_current();
+
     /* Handle messages from RDP server while client is running */
     while (client->state == GUAC_CLIENT_RUNNING
             && !guac_rdp_disp_reconnect_needed(rdp_client->disp)) {
@@ -656,6 +662,25 @@ static int guac_rdp_handle_connection(guac_client* client) {
          * See FORK.md and NEN-1341. */
         if (settings->emit_input_drain)
             guac_protocol_send_nop(client->socket);
+
+        /* Nen fork: keepalive nop. Emit an unconditional wire-level nop on
+         * the client socket every settings->keepalive_interval milliseconds
+         * so legitimately-idle desktops (no display changes, no input) do
+         * not trigger the 15s receive timeouts in wwt/guac (controller
+         * side) and guacamole-common-js (browser side), which would
+         * otherwise produce a tight reconnect cycle for read-only viewers.
+         * Gated by keepalive_interval > 0; with the arg unset this block
+         * is a single integer compare and the build is bit-for-bit
+         * upstream. The loop wakes at least every
+         * GUAC_RDP_MESSAGE_CHECK_INTERVAL (1000ms), so values below that
+         * coarsen to the loop wakeup rate. See FORK.md and NEN-1488. */
+        if (settings->keepalive_interval > 0) {
+            guac_timestamp now = guac_timestamp_current();
+            if ((now - last_keepalive_nop) >= settings->keepalive_interval) {
+                guac_protocol_send_nop(client->socket);
+                last_keepalive_nop = now;
+            }
+        }
 
         /* Close connection cleanly if server is disconnecting */
         if (connection_closing)
