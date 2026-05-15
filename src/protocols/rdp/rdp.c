@@ -677,18 +677,19 @@ static int guac_rdp_handle_connection(guac_client* client) {
         if (settings->keepalive_interval > 0) {
             guac_timestamp now = guac_timestamp_current();
             if ((now - last_keepalive_nop) >= settings->keepalive_interval) {
-                /* Count users in each list separately (lock-free read; just
-                 * diagnostic) */
-                int promoted = 0, pending = 0;
-                for (guac_user* u = client->__users; u != NULL; u = u->__next)
-                    promoted++;
-                for (guac_user* u = client->__pending_users; u != NULL; u = u->__next)
-                    pending++;
-                guac_client_log(client, GUAC_LOG_INFO,
-                        "NEN-1488 DEBUG: emitting keepalive nop "
-                        "(connected=%d promoted=%d pending=%d)",
-                        client->connected_users, promoted, pending);
                 guac_protocol_send_nop(client->socket);
+                /* The flush is essential, not optional: client->socket
+                 * buffers writes and only flushes on a frame/draw boundary.
+                 * On a genuinely idle desktop there are no draws, so without
+                 * this explicit flush the keepalive nop (and the periodic
+                 * sync that shares this buffered broadcast socket) never
+                 * leaves the guacd child — idle viewers get nothing and
+                 * guacd drops them as "User is not responding", producing
+                 * the very reconnect loop this arg exists to prevent.
+                 * Verified by instrumented sandbox-dev repro 2026-05-15
+                 * (NEN-1488): emit-without-flush relayed the nop only on
+                 * draw boundaries, never for the lone idle keepalive. */
+                guac_socket_flush(client->socket);
                 last_keepalive_nop = now;
             }
         }
