@@ -38,13 +38,18 @@ designed to detect genuinely dead upstreams. On a legitimately-idle
 Windows desktop with a read-only viewer, guacd has nothing to send
 — no display changes, no input — so those timers trip and the user
 sees a tight reconnect cycle (Nen's NEN-1485 / NEN-1487 / NEN-1488).
-The keepalive arg, when configured, makes the RDP plugin emit an
-unconditional protocol-level `nop` at the configured cadence **and
+The keepalive arg, when configured, makes the RDP plugin emit a
+distinct `nen-keepalive` instruction at the configured cadence **and
 explicitly flush the client socket** (the flush is essential — the
 socket otherwise only flushes on a draw boundary, so on a genuinely
-idle desktop the nop never leaves guacd) so neither timer ever sees
-true silence. Like `emit-input-drain`, the
-default (`0`) is bit-for-bit upstream.
+idle desktop the instruction never leaves guacd) so neither timer ever
+sees true silence. It is deliberately **not** a `nop`: the
+`emit-input-drain` arg also emits a bare `nop`, which Cup's `bring`
+client consumes as the NEN-768 input-drain barrier signal — a keepalive
+`nop` could prematurely release that barrier and silently drop/reorder
+keystrokes. A separate opcode keeps the two signals decoupled by
+construction; conformant clients ignore the unknown opcode. Like
+`emit-input-drain`, the default (`0`) is bit-for-bit upstream.
 
 ## Divergence policy
 

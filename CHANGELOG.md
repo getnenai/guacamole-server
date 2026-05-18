@@ -10,20 +10,24 @@ Adds the `keepalive-interval` RDP connection argument.
 ### Added
 
 - **`keepalive-interval` RDP connection argument** (integer, milliseconds).
-  When set to a positive value on an RDP connection, guacd emits an
-  unconditional wire-level `nop` instruction on the client socket at
-  approximately the configured interval from inside the main loop **and
-  explicitly flushes the client socket**. The flush is essential, not
-  cosmetic: `client->socket` only flushes on a frame/draw boundary, so
-  on a genuinely idle desktop an unflushed nop (and the periodic `sync`
-  sharing the buffered broadcast socket) never leaves the guacd child —
-  idle viewers would still be dropped as "not responding". With the
-  flush, legitimately-idle desktops (no display changes, no input) do
-  not produce silence on the protocol stream. Pairs with the 15-second
-  receive timeouts in `wwt/guac` `Stream.SocketTimeout` (Cup's Go
-  controller) and `guacamole-common-js` `Tunnel.receiveTimeout` (Nen's
-  browser viewer), so read-only viewers of idle Windows desktops no
-  longer see a ~15-second reconnect cycle.
+  When positive, guacd emits a distinct `nen-keepalive` instruction on
+  the client socket at ~the configured interval from the main loop **and
+  explicitly flushes the client socket**. Two essentials:
+  - **Distinct opcode, not `nop`:** the `emit-input-drain` patch also
+    sends a bare `nop`, and Cup's `bring` client treats any inbound `nop`
+    as the NEN-768 input-drain barrier signal. A keepalive `nop` landing
+    mid-keystroke would prematurely release that barrier and silently
+    drop/reorder input, so the keepalive uses a separate opcode that
+    conformant clients ignore — decoupling the two signals by
+    construction.
+  - **Flush is essential, not cosmetic:** `client->socket` only flushes
+    on a frame/draw boundary, so on a genuinely idle desktop an unflushed
+    instruction never leaves the guacd child and idle viewers are dropped
+    as "not responding".
+  Pairs with the 15-second receive timeouts in `wwt/guac`
+  `Stream.SocketTimeout` (Cup's Go controller) and `guacamole-common-js`
+  `Tunnel.receiveTimeout` (Nen's browser viewer), so read-only viewers of
+  idle Windows desktops no longer see a ~15-second reconnect cycle.
 
   The main loop wakes at least every `GUAC_RDP_MESSAGE_CHECK_INTERVAL`
   (1000ms), so values below ~1000ms coarsen to the loop wakeup rate.
@@ -61,6 +65,14 @@ only on sporadic screen-draw boundaries and guacd dropped the viewer
 every ~20–35s, producing the reconnect loop. With `keepalive-interval`
 unset (0) this block is a single integer compare — bit-for-bit
 equivalent to `1.6.0-nen-0.1`. Full record: Linear NEN-1488.
+
+**Note:** the 2026-05-18 verification used the earlier `nop` keepalive
+and exercised only the idle path. The keepalive opcode was subsequently
+changed to the distinct `nen-keepalive` (to stop aliasing the
+`emit-input-drain` `nop`); idle behaviour is unchanged (any inbound
+instruction resets the timers) and decoupling is proven deterministically
+by the cup-side `bring` unit test. Concurrent-typing re-verification on
+sandbox-dev is tracked as a release gate before this tag is rolled.
 
 ## 1.6.0-nen-0.1 — 2026-05
 

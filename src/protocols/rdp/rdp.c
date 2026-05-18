@@ -605,11 +605,11 @@ static int guac_rdp_handle_connection(guac_client* client) {
 
     rdp_client->render_thread = guac_display_render_thread_create(rdp_client->display);
 
-    /* Nen fork: timestamp of last keepalive nop emitted by this connection.
-     * Initialised to the current monotonic millisecond clock so the first
-     * keepalive fires after a full interval rather than immediately. Used
-     * only if settings->keepalive_interval > 0. See FORK.md and NEN-1488. */
-    guac_timestamp last_keepalive_nop = guac_timestamp_current();
+    /* Nen fork: timestamp of the last keepalive instruction emitted by this
+     * connection. Initialised to the current monotonic millisecond clock so
+     * the first keepalive fires after a full interval rather than immediately.
+     * Used only if settings->keepalive_interval > 0. See FORK.md and NEN-1488. */
+    guac_timestamp last_keepalive = guac_timestamp_current();
 
     /* Handle messages from RDP server while client is running */
     while (client->state == GUAC_CLIENT_RUNNING
@@ -663,19 +663,32 @@ static int guac_rdp_handle_connection(guac_client* client) {
         if (settings->emit_input_drain)
             guac_protocol_send_nop(client->socket);
 
-        /* Nen fork: emit a nop every keepalive_interval ms so idle desktops
-         * don't trip the 15s receive timeouts in wwt/guac and
-         * guacamole-common-js. Unset (0) = disabled, bit-for-bit upstream.
-         * See FORK.md and NEN-1488. */
+        /* Nen fork: every keepalive_interval ms emit a distinct
+         * "nen-keepalive" instruction (NOT a nop) so idle desktops don't
+         * trip the 15s receive timeouts in wwt/guac and guacamole-common-js.
+         * It must NOT be a nop: the emit-input-drain feature above also
+         * sends a bare nop, and Cup's bring client treats any inbound nop
+         * as the NEN-768 input-drain barrier signal — a keepalive nop
+         * landing mid-keystroke would prematurely release that barrier and
+         * silently drop/reorder input. A separate opcode keeps the two
+         * signals decoupled by construction; conformant clients ignore the
+         * unknown opcode, and any inbound instruction still resets the
+         * silence timers. Emitted via the public libguac socket primitives
+         * (same shape as guac_protocol_send_nop) to keep the patch within
+         * the RDP plugin (no libguac change). Unset (0) = disabled,
+         * bit-for-bit upstream. See FORK.md and NEN-1488. */
         if (settings->keepalive_interval > 0) {
             guac_timestamp now = guac_timestamp_current();
-            if ((now - last_keepalive_nop) >= settings->keepalive_interval) {
-                guac_protocol_send_nop(client->socket);
+            if ((now - last_keepalive) >= settings->keepalive_interval) {
+                guac_socket_instruction_begin(client->socket);
+                guac_socket_write_string(client->socket, "13.nen-keepalive;");
+                guac_socket_instruction_end(client->socket);
                 /* Flush is required, not cosmetic: client->socket only
-                 * flushes on a draw boundary, so on an idle desktop the nop
-                 * never leaves guacd without this. See FORK.md/NEN-1488. */
+                 * flushes on a draw boundary, so on an idle desktop the
+                 * instruction never leaves guacd without this.
+                 * See FORK.md/NEN-1488. */
                 guac_socket_flush(client->socket);
-                last_keepalive_nop = now;
+                last_keepalive = now;
             }
         }
 
