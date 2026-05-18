@@ -681,6 +681,12 @@ static int guac_rdp_handle_connection(guac_client* client) {
             guac_timestamp now = guac_timestamp_current();
             if ((now - last_keepalive) >= settings->keepalive_interval) {
                 guac_socket_instruction_begin(client->socket);
+                /* Guacamole wire framing: the "13." length prefix MUST
+                 * equal strlen("nen-keepalive"). If the opcode is ever
+                 * renamed, update the prefix in lockstep — a mismatch
+                 * desyncs the parser and corrupts the whole stream, not
+                 * just the keepalive. (Same hand-maintained form as
+                 * libguac's guac_protocol_send_nop("3.nop;").) */
                 guac_socket_write_string(client->socket, "13.nen-keepalive;");
                 guac_socket_instruction_end(client->socket);
                 /* Flush is required, not cosmetic: client->socket only

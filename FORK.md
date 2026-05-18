@@ -72,10 +72,11 @@ construction; conformant clients ignore the unknown opcode. Like
 - `1.6.0-nen-0.1` — initial Nen patch: adds `emit-input-drain`
   connection arg.
 - `1.6.0-nen-0.2` — adds `keepalive-interval` connection arg
-  (millisecond interval between unconditional protocol-level nops on
-  otherwise-quiet RDP sessions; pairs with the 15s receive timeouts in
-  `wwt/guac` and `guacamole-common-js`). See `CHANGELOG.md` and Linear
-  NEN-1488.
+  (millisecond interval between distinct `nen-keepalive` instructions —
+  deliberately *not* nops, so they cannot alias the `emit-input-drain`
+  barrier — on otherwise-quiet RDP sessions; pairs with the 15s receive
+  timeouts in `wwt/guac` and `guacamole-common-js`). See `CHANGELOG.md`
+  and Linear NEN-1488.
 
 ## Building
 
