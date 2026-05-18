@@ -663,32 +663,17 @@ static int guac_rdp_handle_connection(guac_client* client) {
         if (settings->emit_input_drain)
             guac_protocol_send_nop(client->socket);
 
-        /* Nen fork: keepalive nop. Emit an unconditional wire-level nop on
-         * the client socket every settings->keepalive_interval milliseconds
-         * so legitimately-idle desktops (no display changes, no input) do
-         * not trigger the 15s receive timeouts in wwt/guac (controller
-         * side) and guacamole-common-js (browser side), which would
-         * otherwise produce a tight reconnect cycle for read-only viewers.
-         * Gated by keepalive_interval > 0; with the arg unset this block
-         * is a single integer compare and the build is bit-for-bit
-         * upstream. The loop wakes at least every
-         * GUAC_RDP_MESSAGE_CHECK_INTERVAL (1000ms), so values below that
-         * coarsen to the loop wakeup rate. See FORK.md and NEN-1488. */
+        /* Nen fork: emit a nop every keepalive_interval ms so idle desktops
+         * don't trip the 15s receive timeouts in wwt/guac and
+         * guacamole-common-js. Unset (0) = disabled, bit-for-bit upstream.
+         * See FORK.md and NEN-1488. */
         if (settings->keepalive_interval > 0) {
             guac_timestamp now = guac_timestamp_current();
             if ((now - last_keepalive_nop) >= settings->keepalive_interval) {
                 guac_protocol_send_nop(client->socket);
-                /* The flush is essential, not optional: client->socket
-                 * buffers writes and only flushes on a frame/draw boundary.
-                 * On a genuinely idle desktop there are no draws, so without
-                 * this explicit flush the keepalive nop (and the periodic
-                 * sync that shares this buffered broadcast socket) never
-                 * leaves the guacd child — idle viewers get nothing and
-                 * guacd drops them as "User is not responding", producing
-                 * the very reconnect loop this arg exists to prevent.
-                 * Verified by instrumented sandbox-dev repro 2026-05-15
-                 * (NEN-1488): emit-without-flush relayed the nop only on
-                 * draw boundaries, never for the lone idle keepalive. */
+                /* Flush is required, not cosmetic: client->socket only
+                 * flushes on a draw boundary, so on an idle desktop the nop
+                 * never leaves guacd without this. See FORK.md/NEN-1488. */
                 guac_socket_flush(client->socket);
                 last_keepalive_nop = now;
             }
