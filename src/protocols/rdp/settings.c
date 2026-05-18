@@ -943,6 +943,17 @@ guac_rdp_settings* guac_rdp_parse_args(guac_user* user,
         guac_user_parse_args_int(user, GUAC_RDP_CLIENT_ARGS, argv,
                 IDX_KEEPALIVE_INTERVAL, 0);
 
+    /* A negative interval is nonsensical. The emit site is gated on
+     * keepalive_interval > 0, so a negative value would silently
+     * disable the keepalive with no operator feedback — surface the
+     * misconfiguration and normalize to 0 (disabled). */
+    if (settings->keepalive_interval < 0) {
+        guac_user_log(user, GUAC_LOG_WARNING, "Specified keepalive-interval "
+                "(%i) is negative; disabling keepalive (treating as 0).",
+                settings->keepalive_interval);
+        settings->keepalive_interval = 0;
+    }
+
     /* Domain */
     settings->domain =
         guac_user_parse_args_string(user, GUAC_RDP_CLIENT_ARGS, argv,
