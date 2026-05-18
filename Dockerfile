@@ -110,8 +110,18 @@ ARG FREERDP_X86_OPTS=""
 
 ARG GUACAMOLE_SERVER_ARM_OPTS=""
 
+# --enable-allow-freerdp-snapshots: guacamole-server 1.6.0's configure has
+# an over-strict "development version of FreeRDP" check. autobuild.sh picks
+# the latest FreeRDP 2.x tag (regex `2(\.\d+)+`), which now resolves to
+# 2.11.8 — a normal point-release made after Apache cut 1.6.0 (latest then
+# was 2.11.7). configure misfires and aborts the build. This flag is the
+# fix recommended by the configure error itself; 2.11.8 is a stability/CVE
+# patch over 2.11.7 with no guacd-affecting behavior change. (cup's
+# docker/Dockerfile.guacd already passes this; mirrored here so the fork's
+# own pr-build.yml CI is green. Alternatively pin WITH_FREERDP="2\.11\.7".)
 ARG GUACAMOLE_SERVER_OPTS="\
     --disable-guaclog \
+    --enable-allow-freerdp-snapshots \
     CPPFLAGS=-Wno-error=deprecated-declarations"
 
 ARG GUACAMOLE_SERVER_X86_OPTS=""
