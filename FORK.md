@@ -38,13 +38,18 @@ designed to detect genuinely dead upstreams. On a legitimately-idle
 Windows desktop with a read-only viewer, guacd has nothing to send
 — no display changes, no input — so those timers trip and the user
 sees a tight reconnect cycle (Nen's NEN-1485 / NEN-1487 / NEN-1488).
-The keepalive arg, when configured, makes the RDP plugin emit an
-unconditional protocol-level `nop` at the configured cadence **and
+The keepalive arg, when configured, makes the RDP plugin emit a
+distinct `nen-keepalive` instruction at the configured cadence **and
 explicitly flush the client socket** (the flush is essential — the
 socket otherwise only flushes on a draw boundary, so on a genuinely
-idle desktop the nop never leaves guacd) so neither timer ever sees
-true silence. Like `emit-input-drain`, the
-default (`0`) is bit-for-bit upstream.
+idle desktop the instruction never leaves guacd) so neither timer ever
+sees true silence. It is deliberately **not** a `nop`: the
+`emit-input-drain` arg also emits a bare `nop`, which Cup's `bring`
+client consumes as the NEN-768 input-drain barrier signal — a keepalive
+`nop` could prematurely release that barrier and silently drop/reorder
+keystrokes. A separate opcode keeps the two signals decoupled by
+construction; conformant clients ignore the unknown opcode. Like
+`emit-input-drain`, the default (`0`) is bit-for-bit upstream.
 
 ## Divergence policy
 
@@ -67,10 +72,11 @@ default (`0`) is bit-for-bit upstream.
 - `1.6.0-nen-0.1` — initial Nen patch: adds `emit-input-drain`
   connection arg.
 - `1.6.0-nen-0.2` — adds `keepalive-interval` connection arg
-  (millisecond interval between unconditional protocol-level nops on
-  otherwise-quiet RDP sessions; pairs with the 15s receive timeouts in
-  `wwt/guac` and `guacamole-common-js`). See `CHANGELOG.md` and Linear
-  NEN-1488.
+  (millisecond interval between distinct `nen-keepalive` instructions —
+  deliberately *not* nops, so they cannot alias the `emit-input-drain`
+  barrier — on otherwise-quiet RDP sessions; pairs with the 15s receive
+  timeouts in `wwt/guac` and `guacamole-common-js`). See `CHANGELOG.md`
+  and Linear NEN-1488.
 
 ## Building
 
