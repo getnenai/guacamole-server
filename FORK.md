@@ -39,8 +39,11 @@ Windows desktop with a read-only viewer, guacd has nothing to send
 — no display changes, no input — so those timers trip and the user
 sees a tight reconnect cycle (Nen's NEN-1485 / NEN-1487 / NEN-1488).
 The keepalive arg, when configured, makes the RDP plugin emit an
-unconditional protocol-level `nop` at the configured cadence so
-neither timer ever sees true silence. Like `emit-input-drain`, the
+unconditional protocol-level `nop` at the configured cadence **and
+explicitly flush the client socket** (the flush is essential — the
+socket otherwise only flushes on a draw boundary, so on a genuinely
+idle desktop the nop never leaves guacd) so neither timer ever sees
+true silence. Like `emit-input-drain`, the
 default (`0`) is bit-for-bit upstream.
 
 ## Divergence policy

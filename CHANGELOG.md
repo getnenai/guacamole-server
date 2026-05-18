@@ -12,9 +12,14 @@ Adds the `keepalive-interval` RDP connection argument.
 - **`keepalive-interval` RDP connection argument** (integer, milliseconds).
   When set to a positive value on an RDP connection, guacd emits an
   unconditional wire-level `nop` instruction on the client socket at
-  approximately the configured interval from inside the main loop, so
-  legitimately-idle desktops (no display changes, no input) do not
-  produce silence on the protocol stream. Pairs with the 15-second
+  approximately the configured interval from inside the main loop **and
+  explicitly flushes the client socket**. The flush is essential, not
+  cosmetic: `client->socket` only flushes on a frame/draw boundary, so
+  on a genuinely idle desktop an unflushed nop (and the periodic `sync`
+  sharing the buffered broadcast socket) never leaves the guacd child —
+  idle viewers would still be dropped as "not responding". With the
+  flush, legitimately-idle desktops (no display changes, no input) do
+  not produce silence on the protocol stream. Pairs with the 15-second
   receive timeouts in `wwt/guac` `Stream.SocketTimeout` (Cup's Go
   controller) and `guacamole-common-js` `Tunnel.receiveTimeout` (Nen's
   browser viewer), so read-only viewers of idle Windows desktops no
@@ -43,17 +48,19 @@ guacamole-server tree). Build completed cleanly under
 guacd binary, libguac-client libraries, and DEPENDENCIES manifest all
 produced successfully.
 
-**Runtime not verified.** Still needs:
-
-- Set `keepalive-interval=5000` on an RDP connection against an idle
-  Windows desktop. Observe one inbound `nop` instruction every ~5s on
-  the wire (tcpdump / wireshark / guacd debug log).
-- With `keepalive-interval` unset (or 0), confirm no extra inbound
-  `nop` traffic; runtime should be bit-for-bit equivalent to
-  `1.6.0-nen-0.1`.
-- Upstream Apache Guacamole web client connects to the patched guacd
-  with `keepalive-interval=5000` and silently drops the inbound nops
-  without error.
+**Runtime verified (2026-05-18, cup-sandbox-dev).** Built as
+`cup-guacd:nen1488-fix-a9241994` and rolled to the controller pool
+(`cup-sandbox-dev-controller:17`) with the controller passing
+`keepalive-interval=5000`. On an idle read-only viewer
+(`dsk_33ecb184345ccd6b54e6ca95`, connID `$76d23e1b`): the controller's
+per-viewer guacd socket received a `nop` **every ~5s, unbroken, for
+~6 minutes of idle**, as small lone-nop chunks (n≈36–54);
+**zero** guacd `User is not responding`; **no** tunnel reconnect churn.
+Without the flush (strawman, same session): nops reached idle viewers
+only on sporadic screen-draw boundaries and guacd dropped the viewer
+every ~20–35s, producing the reconnect loop. With `keepalive-interval`
+unset (0) this block is a single integer compare — bit-for-bit
+equivalent to `1.6.0-nen-0.1`. Full record: Linear NEN-1488.
 
 ## 1.6.0-nen-0.1 — 2026-05
 
