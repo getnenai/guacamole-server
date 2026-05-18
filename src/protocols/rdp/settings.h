@@ -690,6 +690,22 @@ typedef struct guac_rdp_settings {
      */
     int emit_input_drain;
 
+    /**
+     * Nen fork: interval in milliseconds between unconditional wire-level
+     * "nop" instructions emitted on the client socket when this RDP plugin
+     * is otherwise quiet. Zero disables the keepalive (default). Used to
+     * pair with the 15-second receive timeouts on both
+     * `wwt/guac`'s `Stream.SocketTimeout` (controller-side) and
+     * guacamole-common-js's `Tunnel.receiveTimeout` (browser-side), so that
+     * legitimately-idle Windows desktops do not produce a tight reconnect
+     * cycle for read-only viewers (see NEN-1485 / NEN-1487 / NEN-1488 /
+     * FORK.md). Loop wakes at least every GUAC_RDP_MESSAGE_CHECK_INTERVAL
+     * (1000ms), so a configured value below ~1000ms will be coarsened to
+     * roughly the loop wakeup rate. With this arg disabled (the default)
+     * the build is bit-for-bit equivalent to upstream Apache 1.6.0.
+     */
+    int keepalive_interval;
+
 } guac_rdp_settings;
 
 /**

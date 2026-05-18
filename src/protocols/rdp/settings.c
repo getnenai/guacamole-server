@@ -158,6 +158,14 @@ const char* GUAC_RDP_CLIENT_ARGS[] = {
      * bit-for-bit equivalent to upstream. See FORK.md and NEN-1341. */
     "emit-input-drain",
 
+    /* Nen fork: interval in milliseconds between unconditional wire-level
+     * nops emitted by the RDP plugin when otherwise quiet. Pairs with the
+     * 15s receive timeouts in wwt/guac and guacamole-common-js so that
+     * idle desktops do not produce a reconnect cycle for read-only
+     * viewers. Default 0 (disabled); with the arg disabled this build is
+     * bit-for-bit equivalent to upstream. See FORK.md and NEN-1488. */
+    "keepalive-interval",
+
     NULL
 };
 
@@ -740,6 +748,16 @@ enum RDP_ARGS_IDX {
      */
     IDX_EMIT_INPUT_DRAIN,
 
+    /**
+     * Nen fork: integer interval in milliseconds between unconditional
+     * wire-level nops emitted by the RDP plugin when otherwise quiet.
+     * Zero (or blank) disables the keepalive. Pairs with the 15s receive
+     * timeouts in wwt/guac and guacamole-common-js (NEN-1488). Default 0;
+     * with the arg disabled this build is bit-for-bit equivalent to
+     * upstream Apache 1.6.0.
+     */
+    IDX_KEEPALIVE_INTERVAL,
+
     RDP_ARGS_COUNT
 };
 
@@ -919,6 +937,19 @@ guac_rdp_settings* guac_rdp_parse_args(guac_user* user,
     settings->emit_input_drain =
         guac_user_parse_args_boolean(user, GUAC_RDP_CLIENT_ARGS, argv,
                 IDX_EMIT_INPUT_DRAIN, 0);
+
+    /* Nen fork: keepalive-interval (ms) — see settings.h docstring. */
+    settings->keepalive_interval =
+        guac_user_parse_args_int(user, GUAC_RDP_CLIENT_ARGS, argv,
+                IDX_KEEPALIVE_INTERVAL, 0);
+
+    /* Negative is nonsensical (emit site is >0-gated); warn + disable. */
+    if (settings->keepalive_interval < 0) {
+        guac_user_log(user, GUAC_LOG_WARNING, "Specified keepalive-interval "
+                "(%i) is negative; disabling keepalive (treating as 0).",
+                settings->keepalive_interval);
+        settings->keepalive_interval = 0;
+    }
 
     /* Domain */
     settings->domain =

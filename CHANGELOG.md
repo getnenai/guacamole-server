@@ -3,6 +3,65 @@
 This file tracks changes in the `getnenai/guacamole-server` fork only.
 For upstream changes, see `apache/guacamole-server`'s own release notes.
 
+## 1.6.0-nen-0.2 — UNRELEASED
+
+Adds the `keepalive-interval` RDP connection argument.
+
+### Added
+
+- **`keepalive-interval` RDP connection argument** (integer, milliseconds).
+  When set to a positive value on an RDP connection, guacd emits an
+  unconditional wire-level `nop` instruction on the client socket at
+  approximately the configured interval from inside the main loop **and
+  explicitly flushes the client socket**. The flush is essential, not
+  cosmetic: `client->socket` only flushes on a frame/draw boundary, so
+  on a genuinely idle desktop an unflushed nop (and the periodic `sync`
+  sharing the buffered broadcast socket) never leaves the guacd child —
+  idle viewers would still be dropped as "not responding". With the
+  flush, legitimately-idle desktops (no display changes, no input) do
+  not produce silence on the protocol stream. Pairs with the 15-second
+  receive timeouts in `wwt/guac` `Stream.SocketTimeout` (Cup's Go
+  controller) and `guacamole-common-js` `Tunnel.receiveTimeout` (Nen's
+  browser viewer), so read-only viewers of idle Windows desktops no
+  longer see a ~15-second reconnect cycle.
+
+  The main loop wakes at least every `GUAC_RDP_MESSAGE_CHECK_INTERVAL`
+  (1000ms), so values below ~1000ms coarsen to the loop wakeup rate.
+  Default is `0` (disabled); with the arg unset or zero this build is
+  bit-for-bit equivalent to upstream Apache 1.6.0 (plus the prior
+  `emit-input-drain` patch).
+
+  Files touched: `src/protocols/rdp/settings.h`,
+  `src/protocols/rdp/settings.c`, `src/protocols/rdp/rdp.c` — the
+  same three files as the prior patch, per `FORK.md`'s divergence
+  policy.
+
+  See `FORK.md` and Linear NEN-1488 for rationale.
+
+### Verification
+
+**Compile verified.** Built end-to-end against the cup repo's
+`docker/Dockerfile.guacd` (the production build chain — Alpine 3.18 +
+FreeRDP from source with `WITH_KRB5=ON` + autobuild.sh against the
+guacamole-server tree). Build completed cleanly under
+`-Werror -Wall -pedantic`, so no warnings on the patched files.
+guacd binary, libguac-client libraries, and DEPENDENCIES manifest all
+produced successfully.
+
+**Runtime verified (2026-05-18, cup-sandbox-dev).** Built as
+`cup-guacd:nen1488-fix-a9241994` and rolled to the controller pool
+(`cup-sandbox-dev-controller:17`) with the controller passing
+`keepalive-interval=5000`. On an idle read-only viewer
+(`dsk_33ecb184345ccd6b54e6ca95`, connID `$76d23e1b`): the controller's
+per-viewer guacd socket received a `nop` **every ~5s, unbroken, for
+~6 minutes of idle**, as small lone-nop chunks (n≈36–54);
+**zero** guacd `User is not responding`; **no** tunnel reconnect churn.
+Without the flush (strawman, same session): nops reached idle viewers
+only on sporadic screen-draw boundaries and guacd dropped the viewer
+every ~20–35s, producing the reconnect loop. With `keepalive-interval`
+unset (0) this block is a single integer compare — bit-for-bit
+equivalent to `1.6.0-nen-0.1`. Full record: Linear NEN-1488.
+
 ## 1.6.0-nen-0.1 — 2026-05
 
 Initial Nen patch on top of upstream Apache Guacamole 1.6.0.

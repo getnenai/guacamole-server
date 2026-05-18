@@ -605,6 +605,12 @@ static int guac_rdp_handle_connection(guac_client* client) {
 
     rdp_client->render_thread = guac_display_render_thread_create(rdp_client->display);
 
+    /* Nen fork: timestamp of last keepalive nop emitted by this connection.
+     * Initialised to the current monotonic millisecond clock so the first
+     * keepalive fires after a full interval rather than immediately. Used
+     * only if settings->keepalive_interval > 0. See FORK.md and NEN-1488. */
+    guac_timestamp last_keepalive_nop = guac_timestamp_current();
+
     /* Handle messages from RDP server while client is running */
     while (client->state == GUAC_CLIENT_RUNNING
             && !guac_rdp_disp_reconnect_needed(rdp_client->disp)) {
@@ -656,6 +662,22 @@ static int guac_rdp_handle_connection(guac_client* client) {
          * See FORK.md and NEN-1341. */
         if (settings->emit_input_drain)
             guac_protocol_send_nop(client->socket);
+
+        /* Nen fork: emit a nop every keepalive_interval ms so idle desktops
+         * don't trip the 15s receive timeouts in wwt/guac and
+         * guacamole-common-js. Unset (0) = disabled, bit-for-bit upstream.
+         * See FORK.md and NEN-1488. */
+        if (settings->keepalive_interval > 0) {
+            guac_timestamp now = guac_timestamp_current();
+            if ((now - last_keepalive_nop) >= settings->keepalive_interval) {
+                guac_protocol_send_nop(client->socket);
+                /* Flush is required, not cosmetic: client->socket only
+                 * flushes on a draw boundary, so on an idle desktop the nop
+                 * never leaves guacd without this. See FORK.md/NEN-1488. */
+                guac_socket_flush(client->socket);
+                last_keepalive_nop = now;
+            }
+        }
 
         /* Close connection cleanly if server is disconnecting */
         if (connection_closing)
